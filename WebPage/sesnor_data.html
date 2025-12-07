@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ESP32 Data Dashboard</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+        crossorigin="" />
+    <style>
+        body, html { height: 100%; margin: 0; font-family: Arial; }
+        .container { display: flex; height: 100vh; }
+        .left { width: 40%; overflow-y: auto; padding: 10px; border-right: 1px solid #ccc; }
+        .right { flex: 1; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #333; padding: 5px; text-align: center; }
+        th { background-color: #f2f2f2; }
+        #map { height: 100%; width: 100%; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="left">
+            <h2>Water Level Data</h2>
+            <table id="waterTable">
+                <thead>
+                    <tr>
+                        <th>Device ID</th>
+                        <th>Distance (cm)</th>
+                        <th>Timestamp</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        <div class="right">
+            <h2>GPS Map</h2>
+            <div id="map"></div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+        crossorigin=""></script>
+    <script>
+        // ================= CSV FILES =================
+        const waterCSV = "https://ultrasonic-sensor-data1.s3.us-east-1.amazonaws.com/water-level/data.csv";
+        const gpsCSV = "https://ultrasonic-sensor-data1.s3.us-east-1.amazonaws.com/gps/location.csv";
+
+        // ================ WATER TABLE =================
+        function fetchWaterCSV() {
+            fetch(waterCSV)
+            .then(res => res.text())
+            .then(data => {
+                const rows = data.trim().split("\n");
+                const tbody = document.getElementById("waterTable").querySelector("tbody");
+                tbody.innerHTML = "";
+                rows.slice(1).forEach(row => {
+                    const cols = row.split(",");
+                    const tr = document.createElement("tr");
+                    cols.forEach(col => {
+                        const td = document.createElement("td");
+                        td.textContent = col;
+                        tr.appendChild(td);
+                    });
+                    tbody.appendChild(tr);
+                });
+            }).catch(err => console.error("Error fetching water CSV:", err));
+        }
+
+        // ================ GPS MAP =================
+        const map = L.map('map').setView([0,0], 2); // default view
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        let markers = [];
+
+        function fetchGPSCSV() {
+            fetch(gpsCSV)
+            .then(res => res.text())
+            .then(data => {
+                const rows = data.trim().split("\n");
+                markers.forEach(m => map.removeLayer(m)); // remove old markers
+                markers = [];
+                rows.slice(1).forEach(row => {
+                    const cols = row.split(",");
+                    const device = cols[0];
+                    const lat = parseFloat(cols[1]);
+                    const lon = parseFloat(cols[2]);
+                    const ts = cols[3];
+                    if(!isNaN(lat) && !isNaN(lon)) {
+                        const marker = L.marker([lat, lon]).addTo(map);
+                        marker.bindPopup(`<b>Device:</b> ${device}<br><b>Time:</b> ${ts}`);
+                        markers.push(marker);
+                    }
+                });
+                if(markers.length > 0) {
+                    const group = new L.featureGroup(markers);
+                    map.fitBounds(group.getBounds().pad(0.5));
+                }
+            }).catch(err => console.error("Error fetching GPS CSV:", err));
+        }
+
+        // Initial fetch
+        fetchWaterCSV();
+        fetchGPSCSV();
+
+        // Auto-refresh every 30s
+        setInterval(() => {
+            fetchWaterCSV();
+            fetchGPSCSV();
+        }, 30000);
+    </script>
+</body>
+</html>
