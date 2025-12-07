@@ -4,8 +4,8 @@
 #include <ArduinoJson.h>
 
 // WiFi credentials
-const char* ssid = "Pixel6";
-const char* password = "maka1234";
+const char* ssid = YOUR_SSID;
+const char* password = YOUR_PASSWORD;
 
 // Ultrasonic sensor pins
 #define TRIG_PIN 5
